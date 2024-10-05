@@ -17,7 +17,6 @@ jobs:
 
     # Step 2: Restore the cached latest release tag
     - name: Restore latest release tag cache
-      id: cache_latest_release
       uses: actions/cache@v3
       with:
         path: latest-release.txt
@@ -32,8 +31,8 @@ jobs:
         ALL_RELEASES=$(echo "$RELEASE_DATA" | jq -r '.[].tag_name')
         echo "Latest release tag: $LATEST_RELEASE"
         echo "All releases: $ALL_RELEASES"
-        echo "::set-output name=latest_release_tag::$LATEST_RELEASE"
-        echo "::set-output name=all_releases::$ALL_RELEASES"
+        echo "latest_release_tag=$LATEST_RELEASE" >> $GITHUB_ENV
+        echo "all_releases=$ALL_RELEASES" >> $GITHUB_ENV
 
     # Step 4: Compare latest release with cached release tag
     - name: Check if the latest release is new
@@ -47,19 +46,19 @@ jobs:
           CACHED_RELEASE="none"
         fi
 
-        if [ "$CACHED_RELEASE" != "${{ steps.get_releases.outputs.latest_release_tag }}" ]; then
-          echo "New release found: ${{ steps.get_releases.outputs.latest_release_tag }}"
-          echo "::set-output name=new_release::true"
+        if [ "$CACHED_RELEASE" != "$LATEST_RELEASE" ]; then
+          echo "New release found: $LATEST_RELEASE"
+          echo "new_release=true" >> $GITHUB_ENV
         else
           echo "No new release."
-          echo "::set-output name=new_release::false"
+          echo "new_release=false" >> $GITHUB_ENV
         fi
 
-    # Step 5: If it's the first run, show all previous releases and download all pif.json files
+    # Step 5: Process all previous releases and download pif.json files
     - name: Process all previous releases (first run)
-      if: steps.check_release.outputs.new_release == 'true' || steps.cache_latest_release.outputs.cache-hit == 'false'
+      if: env.new_release == 'true' || steps.restore_latest_release_tag_cache.outputs.cache-hit == 'false'
       run: |
-        ALL_RELEASES=$(curl -s https://api.github.com/repos/chiteroman/PlayIntegrityFix/releases | jq -r '.[].tag_name')
+        ALL_RELEASES=$ALL_RELEASES
         for RELEASE_TAG in $ALL_RELEASES; do
           echo "Processing release: $RELEASE_TAG"
           RELEASE_URL=$(curl -s https://api.github.com/repos/chiteroman/PlayIntegrityFix/releases/tags/$RELEASE_TAG | jq -r '.assets[] | select(.name | endswith(".zip")).browser_download_url')
@@ -86,26 +85,24 @@ jobs:
       run: |
         TAG_NAME="v$(date +'%Y%m%d-%H%M%S')"
         echo "Generated tag name: $TAG_NAME"
-        echo "::set-output name=tag::$TAG_NAME"
+        echo "tag=$TAG_NAME" >> $GITHUB_ENV
 
-    # Step 7: Create a new release with all pif.json files (if first run) or only the latest release
+    # Step 7: Create a new release with all pif.json files (if first run)
     - name: Create new release
       id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
       with:
-        tag_name: ${{ steps.generate_tag.outputs.tag }}  # Use the generated tag
+        tag_name: ${{ env.tag }}  # Use the generated tag
         release_name: "pif.json updates"
         body: |
           Automatically uploaded pif.json files from PlayIntegrityFix repository.
-          {{# if steps.cache_latest_release.outputs.cache-hit == 'false' }}
-          Previous releases: ${{ steps.get_releases.outputs.all_releases }}.
-          {{/ if }}
+          Previous releases: ${{ env.all_releases }}.
         draft: false
         prerelease: false
 
-    # Step 8: Upload all pif.json files to the newly created release
+    # Step 8: Upload pif.json files to the newly created release
     - name: Upload pif.json files to release
       uses: actions/upload-release-asset@v1
       env:
@@ -118,9 +115,9 @@ jobs:
 
     # Step 9: Cache the latest release tag for future runs
     - name: Cache the latest release tag
-      if: steps.check_release.outputs.new_release == 'true' || steps.cache_latest_release.outputs.cache-hit == 'false'
+      if: env.new_release == 'true' || steps.restore_latest_release_tag_cache.outputs.cache-hit == 'false'
       run: |
-        echo "${{ steps.get_releases.outputs.latest_release_tag }}" > latest-release.txt
+        echo "${{ env.latest_release_tag }}" > latest-release.txt
       uses: actions/upload-artifact@v2
       with:
         name: latest-release-tag
