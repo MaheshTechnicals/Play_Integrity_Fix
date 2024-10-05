@@ -26,20 +26,18 @@ jobs:
           echo "::set-output name=release_tag::$RELEASE_TAG"
           echo "::set-output name=release_url::$RELEASE_URL"
 
-      # Step 3: Delete old release if it exists
-      - name: Check and delete old release
+      # Step 3: Delete all existing releases
+      - name: Delete all existing releases
         run: |
-          OLD_RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" \
-            https://api.github.com/repos/MaheshTechnicals/Play_Integrity_Fix/releases/tags/${{ steps.generate_tag.outputs.tag }} \
-            | jq -r '.id')
-
-          if [ "$OLD_RELEASE_ID" != "null" ]; then
-            echo "Old release found, deleting..."
+          RELEASES=$(curl -s -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" \
+            https://api.github.com/repos/MaheshTechnicals/Play_Integrity_Fix/releases)
+          
+          echo "Deleting existing releases..."
+          for RELEASE_ID in $(echo "$RELEASES" | jq -r '.[].id'); do
             curl -X DELETE -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" \
-              https://api.github.com/repos/MaheshTechnicals/Play_Integrity_Fix/releases/$OLD_RELEASE_ID
-          else
-            echo "No old release found."
-          fi
+              https://api.github.com/repos/MaheshTechnicals/Play_Integrity_Fix/releases/$RELEASE_ID
+            echo "Deleted release with ID: $RELEASE_ID"
+          done
 
       # Step 4: Download the latest PlayIntegrityFix release
       - name: Download latest PlayIntegrityFix release
