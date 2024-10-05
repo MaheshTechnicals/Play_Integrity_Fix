@@ -3,8 +3,8 @@ name: Update PIF JSON on New Release
 on:
   workflow_dispatch: # Allows manual triggering for the first run
   schedule:
-    # Run this workflow every 24 hours
-    - cron: '0 0 * * *'
+    # Run this workflow every 6 hours
+    - cron: '0 */6 * * *'
 
 jobs:
   download_extract_upload:
