@@ -63,14 +63,20 @@ jobs:
         for RELEASE_TAG in $ALL_RELEASES; do
           echo "Processing release: $RELEASE_TAG"
           RELEASE_URL=$(curl -s https://api.github.com/repos/chiteroman/PlayIntegrityFix/releases/tags/$RELEASE_TAG | jq -r '.assets[] | select(.name | endswith(".zip")).browser_download_url')
+          if [ -z "$RELEASE_URL" ]; then
+            echo "No zip file found for release $RELEASE_TAG. Skipping..."
+            continue
+          fi
           echo "Downloading $RELEASE_URL"
           curl -L "$RELEASE_URL" --output PlayIntegrityFix-$RELEASE_TAG.zip
           unzip PlayIntegrityFix-$RELEASE_TAG.zip
+          
           if [ -f "pif.json" ]; then
             echo "pif.json found for release $RELEASE_TAG!"
             mv pif.json pif-$RELEASE_TAG.json
           else
-            echo "pif.json not found for release $RELEASE_TAG!" && exit 1
+            echo "pif.json not found for release $RELEASE_TAG. Skipping..."
+            continue
           fi
         done
 
