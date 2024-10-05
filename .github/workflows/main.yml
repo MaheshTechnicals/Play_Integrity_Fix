@@ -3,7 +3,7 @@ name: Update PIF JSON on New Release
 on:
   workflow_dispatch: # Allows manual triggering for the first run
   schedule:
-    # Run this workflow every 6 hours to check for new releases (you can adjust this)
+    # Run this workflow every 6 hours to check for new releases
     - cron: '0 */6 * * *'
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    # Step 2: Get the latest release from PlayIntegrityFix repository
+    # Step 2: Download the latest release from PlayIntegrityFix
     - name: Download latest PlayIntegrityFix release
       run: |
         LATEST_RELEASE=$(curl -s https://api.github.com/repos/chiteroman/PlayIntegrityFix/releases/latest | jq -r '.assets[] | select(.name | endswith(".zip")).browser_download_url')
@@ -31,24 +31,32 @@ jobs:
           echo "pif.json not found!" && exit 1
         fi
 
-    # Step 4: Create a new release in your repository if there is a new release in PlayIntegrityFix
+    # Step 4: Generate a valid and unique tag name based on the current date and time
+    - name: Generate tag name
+      id: generate_tag
+      run: |
+        TAG_NAME="v$(date +'%Y%m%d-%H%M%S')"
+        echo "Generated tag name: $TAG_NAME"
+        echo "::set-output name=tag::$TAG_NAME"
+
+    # Step 5: Create a new release with the generated tag
     - name: Create new release with pif.json
       id: create_release
       uses: actions/create-release@v1
       env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}  # Replace this with your custom secret
+        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
       with:
-        tag_name: "pif-json-$(date +'%Y%m%d')"  # Use date format YYYYMMDD as a valid tag
+        tag_name: ${{ steps.generate_tag.outputs.tag }}  # Use the generated tag
         release_name: "pif.json update"
         body: "Automatically uploaded pif.json file from the latest PlayIntegrityFix release."
         draft: false
         prerelease: false
 
-    # Step 5: Upload pif.json to the newly created release
+    # Step 6: Upload pif.json to the newly created release
     - name: Upload pif.json to release
       uses: actions/upload-release-asset@v1
       env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}  # Replace this with your custom secret
+        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./pif.json
