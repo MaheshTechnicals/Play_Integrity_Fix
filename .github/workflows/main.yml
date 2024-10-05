@@ -26,13 +26,28 @@ jobs:
         echo "::set-output name=release_tag::$RELEASE_TAG"
         echo "::set-output name=release_url::$RELEASE_URL"
 
-    # Step 3: Download the latest PlayIntegrityFix release
+    # Step 3: Check if the latest release tag already exists in your repository
+    - name: Check if release already exists
+      id: check_release
+      run: |
+        EXISTING_TAGS=$(curl -s -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/releases | jq -r '.[].tag_name')
+        if echo "$EXISTING_TAGS" | grep -q "${{ steps.get_latest_release.outputs.release_tag }}"; then
+          echo "Release with tag ${{ steps.get_latest_release.outputs.release_tag }} already exists."
+          echo "::set-output name=release_exists::true"
+        else
+          echo "No existing release with tag ${{ steps.get_latest_release.outputs.release_tag }}."
+          echo "::set-output name=release_exists::false"
+        fi
+
+    # Step 4: Download the latest PlayIntegrityFix release (only if new tag)
     - name: Download latest PlayIntegrityFix release
+      if: steps.check_release.outputs.release_exists == 'false'
       run: |
         curl -L "${{ steps.get_latest_release.outputs.release_url }}" --output PlayIntegrityFix.zip
 
-    # Step 4: Extract the zip file and get pif.json
+    # Step 5: Extract the zip file and get pif.json (only if new tag)
     - name: Extract pif.json from the zip
+      if: steps.check_release.outputs.release_exists == 'false'
       run: |
         unzip PlayIntegrityFix.zip
         if [ -f "pif.json" ]; then
@@ -41,24 +56,27 @@ jobs:
           echo "pif.json not found!" && exit 1
         fi
 
-    # Step 5: Read MODEL value from pif.json
+    # Step 6: Read MODEL value from pif.json (only if new tag)
     - name: Read MODEL value
+      if: steps.check_release.outputs.release_exists == 'false'
       id: read_model
       run: |
         MODEL=$(jq -r '.MODEL' pif.json)
         echo "MODEL value: $MODEL"
         echo "::set-output name=model::$MODEL"
 
-    # Step 6: Generate a valid and unique tag name for your release
+    # Step 7: Generate a valid and unique tag name for your release (only if new tag)
     - name: Generate tag name
+      if: steps.check_release.outputs.release_exists == 'false'
       id: generate_tag
       run: |
         TAG_NAME="v$(date +'%Y%m%d-%H%M%S')"
         echo "Generated tag name: $TAG_NAME"
         echo "::set-output name=tag::$TAG_NAME"
 
-    # Step 7: Create a new release with PlayIntegrityFix tag mentioned in the description
+    # Step 8: Create a new release with PlayIntegrityFix tag mentioned in the description (only if new tag)
     - name: Create new release with pif.json
+      if: steps.check_release.outputs.release_exists == 'false'
       id: create_release
       uses: actions/create-release@v1
       env:
@@ -70,8 +88,9 @@ jobs:
         draft: false
         prerelease: false
 
-    # Step 8: Upload pif.json to the newly created release
+    # Step 9: Upload pif.json to the newly created release (only if new tag)
     - name: Upload pif.json to release
+      if: steps.check_release.outputs.release_exists == 'false'
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
@@ -80,3 +99,8 @@ jobs:
         asset_path: ./pif.json
         asset_name: pif.json
         asset_content_type: application/json
+
+    # Step 10: Skip workflow if no new release
+    - name: Skip if no new release
+      if: steps.check_release.outputs.release_exists == 'true'
+      run: echo "No new release to create."
