@@ -15,21 +15,13 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    # Step 2: Check the latest release in your repository
-    - name: Get the latest release info
-      id: my_release
-      run: |
-        LATEST_RELEASE=$(curl -s https://api.github.com/repos/OWNER/REPO/releases/latest | jq -r '.tag_name')
-        echo "Latest release tag: $LATEST_RELEASE"
-        echo "::set-output name=latest_release::$LATEST_RELEASE"
-    
-    # Step 3: Get the latest release from PlayIntegrityFix repository
+    # Step 2: Get the latest release from PlayIntegrityFix repository
     - name: Download latest PlayIntegrityFix release
       run: |
         LATEST_RELEASE=$(curl -s https://api.github.com/repos/chiteroman/PlayIntegrityFix/releases/latest | jq -r '.assets[] | select(.name | endswith(".zip")).browser_download_url')
         curl -L "$LATEST_RELEASE" --output PlayIntegrityFix.zip
 
-    # Step 4: Extract the zip file and get pif.json
+    # Step 3: Extract the zip file and get pif.json
     - name: Extract pif.json from the zip
       run: |
         unzip PlayIntegrityFix.zip
@@ -39,20 +31,20 @@ jobs:
           echo "pif.json not found!" && exit 1
         fi
 
-    # Step 5: Create a new release in your repository if there is a new release in PlayIntegrityFix
+    # Step 4: Create a new release in your repository if there is a new release in PlayIntegrityFix
     - name: Create new release with pif.json
       id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}  # Replace this with your custom secret
       with:
-        tag_name: "pif-json-$(date +'%Y%m%d%H%M%S')"  # Unique tag for the release
+        tag_name: "pif-json-$(date +'%Y%m%d')"  # Use date format YYYYMMDD as a valid tag
         release_name: "pif.json update"
         body: "Automatically uploaded pif.json file from the latest PlayIntegrityFix release."
         draft: false
         prerelease: false
 
-    # Step 6: Upload pif.json to the newly created release
+    # Step 5: Upload pif.json to the newly created release
     - name: Upload pif.json to release
       uses: actions/upload-release-asset@v1
       env:
