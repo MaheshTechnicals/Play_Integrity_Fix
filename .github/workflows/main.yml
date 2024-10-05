@@ -41,7 +41,15 @@ jobs:
           echo "pif.json not found!" && exit 1
         fi
 
-    # Step 5: Generate a valid and unique tag name for your release
+    # Step 5: Read MODEL value from pif.json
+    - name: Read MODEL value
+      id: read_model
+      run: |
+        MODEL=$(jq -r '.MODEL' pif.json)
+        echo "MODEL value: $MODEL"
+        echo "::set-output name=model::$MODEL"
+
+    # Step 6: Generate a valid and unique tag name for your release
     - name: Generate tag name
       id: generate_tag
       run: |
@@ -49,7 +57,7 @@ jobs:
         echo "Generated tag name: $TAG_NAME"
         echo "::set-output name=tag::$TAG_NAME"
 
-    # Step 6: Create a new release with PlayIntegrityFix tag mentioned in the description
+    # Step 7: Create a new release with PlayIntegrityFix tag mentioned in the description
     - name: Create new release with pif.json
       id: create_release
       uses: actions/create-release@v1
@@ -58,11 +66,11 @@ jobs:
       with:
         tag_name: ${{ steps.generate_tag.outputs.tag }}  # Use the generated tag
         release_name: "${{ steps.get_latest_release.outputs.release_tag }}"
-        body: "Automatically uploaded pif.json file from PlayIntegrityFix release tag: ${{ steps.get_latest_release.outputs.release_tag }}."
+        body: "pif.json update (${{ steps.read_model.outputs.model }} spoofing)"
         draft: false
         prerelease: false
 
-    # Step 7: Upload pif.json to the newly created release
+    # Step 8: Upload pif.json to the newly created release
     - name: Upload pif.json to release
       uses: actions/upload-release-asset@v1
       env:
