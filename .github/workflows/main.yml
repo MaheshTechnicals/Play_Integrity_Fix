@@ -64,16 +64,16 @@ jobs:
         echo "MODEL value: $MODEL"
         echo "MODEL=$MODEL" >> $GITHUB_ENV
 
-    # Step 7: Generate a unique tag name with a timestamp
+    # Step 7: Generate a valid and unique tag name for your release (only if new tag)
     - name: Generate tag name
       if: env.RELEASE_EXISTS == 'false'
       id: generate_tag
       run: |
-        TAG_NAME="${{ env.RELEASE_TAG }}-$(date +'%Y%m%d-%H%M%S')"  # Append a timestamp
+        TAG_NAME="v$(date +'%Y%m%d-%H%M%S')"
         echo "Generated tag name: $TAG_NAME"
         echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
-    # Step 8: Create a new release with the unique tag
+    # Step 8: Create a new release with PlayIntegrityFix tag mentioned in the description (only if new tag)
     - name: Create new release with pif.json
       if: env.RELEASE_EXISTS == 'false'
       id: create_release
