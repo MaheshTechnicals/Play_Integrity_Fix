@@ -23,31 +23,30 @@ jobs:
         RELEASE_URL=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.name | endswith(".zip")).browser_download_url')
         RELEASE_TAG=$(echo "$RELEASE_DATA" | jq -r '.tag_name')
         echo "Latest release tag: $RELEASE_TAG"
-        echo "::set-output name=release_tag::$RELEASE_TAG"
-        echo "::set-output name=release_url::$RELEASE_URL"
+        echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+        echo "RELEASE_URL=$RELEASE_URL" >> $GITHUB_ENV
 
     # Step 3: Check if the latest release tag already exists in your repository
     - name: Check if release already exists
       id: check_release
       run: |
         EXISTING_TAGS=$(curl -s -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/releases | jq -r '.[].tag_name')
-        if echo "$EXISTING_TAGS" | grep -q "${{ steps.get_latest_release.outputs.release_tag }}"; then
-          echo "Release with tag ${{ steps.get_latest_release.outputs.release_tag }} already exists."
-          echo "::set-output name=release_exists::true"
+        if echo "$EXISTING_TAGS" | grep -q "${{ env.RELEASE_TAG }}"; then
+          echo "Release with tag ${{ env.RELEASE_TAG }} already exists."
+          echo "RELEASE_EXISTS=true" >> $GITHUB_ENV
         else
-          echo "No existing release with tag ${{ steps.get_latest_release.outputs.release_tag }}."
-          echo "::set-output name=release_exists::false"
-        fi
+          echo "No existing release with tag ${{ env.RELEASE_TAG }}."
+          echo "RELEASE_EXISTS=false" >> $GITHUB_ENV
 
     # Step 4: Download the latest PlayIntegrityFix release (only if new tag)
     - name: Download latest PlayIntegrityFix release
-      if: steps.check_release.outputs.release_exists == 'false'
+      if: env.RELEASE_EXISTS == 'false'
       run: |
-        curl -L "${{ steps.get_latest_release.outputs.release_url }}" --output PlayIntegrityFix.zip
+        curl -L "${{ env.RELEASE_URL }}" --output PlayIntegrityFix.zip
 
     # Step 5: Extract the zip file and get pif.json (only if new tag)
     - name: Extract pif.json from the zip
-      if: steps.check_release.outputs.release_exists == 'false'
+      if: env.RELEASE_EXISTS == 'false'
       run: |
         unzip PlayIntegrityFix.zip
         if [ -f "pif.json" ]; then
@@ -58,39 +57,39 @@ jobs:
 
     # Step 6: Read MODEL value from pif.json (only if new tag)
     - name: Read MODEL value
-      if: steps.check_release.outputs.release_exists == 'false'
+      if: env.RELEASE_EXISTS == 'false'
       id: read_model
       run: |
         MODEL=$(jq -r '.MODEL' pif.json)
         echo "MODEL value: $MODEL"
-        echo "::set-output name=model::$MODEL"
+        echo "MODEL=$MODEL" >> $GITHUB_ENV
 
-    # Step 7: Generate a valid and unique tag name for your release (only if new tag)
+    # Step 7: Generate a unique tag name with a timestamp
     - name: Generate tag name
-      if: steps.check_release.outputs.release_exists == 'false'
+      if: env.RELEASE_EXISTS == 'false'
       id: generate_tag
       run: |
-        TAG_NAME="v$(date +'%Y%m%d-%H%M%S')"
+        TAG_NAME="${{ env.RELEASE_TAG }}-$(date +'%Y%m%d-%H%M%S')"  # Append a timestamp
         echo "Generated tag name: $TAG_NAME"
-        echo "::set-output name=tag::$TAG_NAME"
+        echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
-    # Step 8: Create a new release with PlayIntegrityFix tag mentioned in the description (only if new tag)
+    # Step 8: Create a new release with the unique tag
     - name: Create new release with pif.json
-      if: steps.check_release.outputs.release_exists == 'false'
+      if: env.RELEASE_EXISTS == 'false'
       id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
       with:
-        tag_name: ${{ steps.generate_tag.outputs.tag }}  # Use the generated tag
-        release_name: "${{ steps.get_latest_release.outputs.release_tag }}"
-        body: "pif.json update (${{ steps.read_model.outputs.model }} spoofing)"
+        tag_name: ${{ env.TAG_NAME }}  # Use the generated tag
+        release_name: "${{ env.RELEASE_TAG }}"
+        body: "pif.json update (${{ env.MODEL }} spoofing)"
         draft: false
         prerelease: false
 
     # Step 9: Upload pif.json to the newly created release (only if new tag)
     - name: Upload pif.json to release
-      if: steps.check_release.outputs.release_exists == 'false'
+      if: env.RELEASE_EXISTS == 'false'
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
@@ -102,5 +101,5 @@ jobs:
 
     # Step 10: Skip workflow if no new release
     - name: Skip if no new release
-      if: steps.check_release.outputs.release_exists == 'true'
+      if: env.RELEASE_EXISTS == 'true'
       run: echo "No new release to create."
