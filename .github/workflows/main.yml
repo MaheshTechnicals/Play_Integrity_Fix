@@ -1,105 +1,66 @@
-name: Update PIF JSON on New Release
+name: Create Release
 
 on:
-  workflow_dispatch: # Allows manual triggering for the first run
-  schedule:
-    # Run this workflow every 6 hours to check for new releases
-    - cron: '0 */6 * * *'
+  push:
+    branches:
+      - main  # You can change this to the branch you want to monitor
 
 jobs:
-  download_extract_upload:
+  create-release:
     runs-on: ubuntu-latest
 
     steps:
-    # Step 1: Check out your repository
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    # Step 2: Get the latest release info from PlayIntegrityFix repository
-    - name: Get PlayIntegrityFix latest release info
-      id: get_latest_release
-      run: |
-        RELEASE_DATA=$(curl -s https://api.github.com/repos/chiteroman/PlayIntegrityFix/releases/latest)
-        RELEASE_URL=$(echo "$RELEASE_DATA" | jq -r '.assets[] | select(.name | endswith(".zip")).browser_download_url')
-        RELEASE_TAG=$(echo "$RELEASE_DATA" | jq -r '.tag_name')
-        echo "Latest release tag: $RELEASE_TAG"
-        echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
-        echo "RELEASE_URL=$RELEASE_URL" >> $GITHUB_ENV
+    - name: Install dependencies
+      run: sudo apt-get install jq
 
-    # Step 3: Check if the latest release tag already exists in your repository
-    - name: Check if release already exists
-      id: check_release
+    - name: Get existing tags and create a new release if the tag does not exist
+      env:
+        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
       run: |
-        EXISTING_TAGS=$(curl -s -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/releases | jq -r '.[].tag_name')
-        if echo "$EXISTING_TAGS" | grep -q "${{ env.RELEASE_TAG }}"; then
-          echo "Release with tag ${{ env.RELEASE_TAG }} already exists."
-          echo "RELEASE_EXISTS=true" >> $GITHUB_ENV
+        # Step 1: Get existing tags
+        EXISTING_TAGS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/${{ github.repository }}/releases | jq -r '.[].tag_name')
+
+        if [ -z "$EXISTING_TAGS" ]; then
+          echo "No existing tags found or an error occurred."
+          exit 1
         else
-          echo "No existing release with tag ${{ env.RELEASE_TAG }}."
-          echo "RELEASE_EXISTS=false" >> $GITHUB_ENV
-
-    # Step 4: Download the latest PlayIntegrityFix release (only if new tag)
-    - name: Download latest PlayIntegrityFix release
-      if: env.RELEASE_EXISTS == 'false'
-      run: |
-        curl -L "${{ env.RELEASE_URL }}" --output PlayIntegrityFix.zip
-
-    # Step 5: Extract the zip file and get pif.json (only if new tag)
-    - name: Extract pif.json from the zip
-      if: env.RELEASE_EXISTS == 'false'
-      run: |
-        unzip PlayIntegrityFix.zip
-        if [ -f "pif.json" ]; then
-          echo "pif.json found!"
-        else
-          echo "pif.json not found!" && exit 1
+          echo "Existing tags: $EXISTING_TAGS"
         fi
 
-    # Step 6: Read MODEL value from pif.json (only if new tag)
-    - name: Read MODEL value
-      if: env.RELEASE_EXISTS == 'false'
-      id: read_model
-      run: |
-        MODEL=$(jq -r '.MODEL' pif.json)
-        echo "MODEL value: $MODEL"
-        echo "MODEL=$MODEL" >> $GITHUB_ENV
+        # Step 2: Define the new tag
+        NEW_TAG="v17.8"  # Update this as needed
 
-    # Step 7: Generate a valid and unique tag name for your release (only if new tag)
-    - name: Generate tag name
-      if: env.RELEASE_EXISTS == 'false'
-      id: generate_tag
-      run: |
-        TAG_NAME="v$(date +'%Y%m%d-%H%M%S')"
-        echo "Generated tag name: $TAG_NAME"
-        echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+        # Step 3: Check if the new tag exists
+        if echo "$EXISTING_TAGS" | grep -q "$NEW_TAG"; then
+          echo "Tag $NEW_TAG already exists. Exiting."
+          exit 0
+        else
+          echo "Tag $NEW_TAG does not exist. Proceeding with the release."
+        fi
 
-    # Step 8: Create a new release with PlayIntegrityFix tag mentioned in the description (only if new tag)
-    - name: Create new release with pif.json
-      if: env.RELEASE_EXISTS == 'false'
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ env.TAG_NAME }}  # Use the generated tag
-        release_name: "${{ env.RELEASE_TAG }}"
-        body: "pif.json update (${{ env.MODEL }} spoofing)"
-        draft: false
-        prerelease: false
+        # Step 4: Create a new release
+        RELEASE_RESPONSE=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d @- https://api.github.com/repos/${{ github.repository }}/releases <<EOF
+        {
+          "tag_name": "$NEW_TAG",
+          "target_commitish": "main",  # You can change this to your branch or commit
+          "name": "$NEW_TAG",
+          "body": "pif.json update (Pixel 9 spoofing)",
+          "draft": false,
+          "prerelease": false
+        }
+        EOF
+        )
 
-    # Step 9: Upload pif.json to the newly created release (only if new tag)
-    - name: Upload pif.json to release
-      if: env.RELEASE_EXISTS == 'false'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./pif.json
-        asset_name: pif.json
-        asset_content_type: application/json
-
-    # Step 10: Skip workflow if no new release
-    - name: Skip if no new release
-      if: env.RELEASE_EXISTS == 'true'
-      run: echo "No new release to create."
+        # Check if the release was created successfully
+        if echo "$RELEASE_RESPONSE" | grep -q '"id"'; then
+          echo "Release $NEW_TAG created successfully."
+        else
+          echo "Failed to create release $NEW_TAG."
+          echo "Response: $RELEASE_RESPONSE"
+          exit 1
+        fi
