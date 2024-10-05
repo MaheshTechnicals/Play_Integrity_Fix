@@ -1,8 +1,9 @@
 name: Update PIF JSON on New Release
 
 on:
+  workflow_dispatch: # Allows manual triggering for the first run
   schedule:
-    # Run this workflow every 6 hours to check for new releases (adjust as needed)
+    # Run this workflow every 6 hours to check for new releases (you can adjust this)
     - cron: '0 */6 * * *'
 
 jobs:
@@ -14,13 +15,21 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    # Step 2: Get the latest release from PlayIntegrityFix repository
+    # Step 2: Check the latest release in your repository
+    - name: Get the latest release info
+      id: my_release
+      run: |
+        LATEST_RELEASE=$(curl -s https://api.github.com/repos/OWNER/REPO/releases/latest | jq -r '.tag_name')
+        echo "Latest release tag: $LATEST_RELEASE"
+        echo "::set-output name=latest_release::$LATEST_RELEASE"
+    
+    # Step 3: Get the latest release from PlayIntegrityFix repository
     - name: Download latest PlayIntegrityFix release
       run: |
         LATEST_RELEASE=$(curl -s https://api.github.com/repos/chiteroman/PlayIntegrityFix/releases/latest | jq -r '.assets[] | select(.name | endswith(".zip")).browser_download_url')
         curl -L "$LATEST_RELEASE" --output PlayIntegrityFix.zip
 
-    # Step 3: Extract the zip file and get pif.json
+    # Step 4: Extract the zip file and get pif.json
     - name: Extract pif.json from the zip
       run: |
         unzip PlayIntegrityFix.zip
@@ -30,7 +39,7 @@ jobs:
           echo "pif.json not found!" && exit 1
         fi
 
-    # Step 4: Create a new release in your repository
+    # Step 5: Create a new release in your repository if there is a new release in PlayIntegrityFix
     - name: Create new release with pif.json
       id: create_release
       uses: actions/create-release@v1
@@ -43,7 +52,7 @@ jobs:
         draft: false
         prerelease: false
 
-    # Step 5: Upload pif.json to the newly created release
+    # Step 6: Upload pif.json to the newly created release
     - name: Upload pif.json to release
       uses: actions/upload-release-asset@v1
       env:
