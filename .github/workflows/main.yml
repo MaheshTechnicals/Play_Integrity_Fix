@@ -24,7 +24,7 @@ jobs:
       # Step 2: Delete all previous workflow runs
       - name: Delete all previous workflow runs
         run: |
-          RUNS=$(echo "${{ steps.get_runs.outputs.runs }}" | jq -r '.workflow_runs[] | .id')
+          RUNS=$(echo "${{ steps.get_runs.outputs.runs }}" | jq -r '.workflow_runs[].id')
           echo "Deleting previous workflow runs..."
           for RUN_ID in $RUNS; do
             curl -X DELETE -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" \
