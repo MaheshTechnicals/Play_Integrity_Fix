@@ -3,45 +3,19 @@ name: Update PIF JSON on New Release
 on:
   workflow_dispatch: # Allows manual triggering for the first run
   schedule:
-    # Run this workflow every 24 hours
-    - cron: '0 0 * * *'
+    # Run this workflow every 6 hours
+    - cron: '0 */6 * * *'
 
 jobs:
-  delete_previous_runs:
-    runs-on: ubuntu-latest
-    steps:
-      # Step 1: Get all previous workflow runs without pagination limit
-      - name: Get all previous workflow runs
-        id: get_runs
-        run: |
-          RUNS=$(curl -s -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/MaheshTechnicals/Play_Integrity_Fix/actions/runs?per_page=100")
-          TOTAL_RUNS=$(echo "$RUNS" | jq -r '.total_count')
-          echo "Found $TOTAL_RUNS previous runs."
-          echo "::set-output name=total_runs::$TOTAL_RUNS"
-          echo "::set-output name=runs::$RUNS"
-
-      # Step 2: Delete all previous workflow runs
-      - name: Delete all previous workflow runs
-        run: |
-          RUNS=$(echo "${{ steps.get_runs.outputs.runs }}" | jq -r '.workflow_runs[].id')
-          echo "Deleting previous workflow runs..."
-          for RUN_ID in $RUNS; do
-            curl -X DELETE -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/MaheshTechnicals/Play_Integrity_Fix/actions/runs/$RUN_ID"
-            echo "Deleted workflow run with ID: $RUN_ID"
-          done
-
   download_extract_upload:
     runs-on: ubuntu-latest
-    needs: delete_previous_runs
 
     steps:
-      # Step 3: Check out your repository
+      # Step 1: Check out your repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 4: Get the latest release info from PlayIntegrityFix repository
+      # Step 2: Get the latest release info from PlayIntegrityFix repository
       - name: Get PlayIntegrityFix latest release info
         id: get_latest_release
         run: |
@@ -52,7 +26,7 @@ jobs:
           echo "::set-output name=release_tag::$RELEASE_TAG"
           echo "::set-output name=release_url::$RELEASE_URL"
 
-      # Step 5: Delete all existing releases
+      # Step 3: Delete all existing releases
       - name: Delete all existing releases
         run: |
           RELEASES=$(curl -s -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" \
@@ -65,12 +39,12 @@ jobs:
             echo "Deleted release with ID: $RELEASE_ID"
           done
 
-      # Step 6: Download the latest PlayIntegrityFix release
+      # Step 4: Download the latest PlayIntegrityFix release
       - name: Download latest PlayIntegrityFix release
         run: |
           curl -L "${{ steps.get_latest_release.outputs.release_url }}" --output PlayIntegrityFix.zip
 
-      # Step 7: Extract the zip file and get pif.json
+      # Step 5: Extract the zip file and get pif.json
       - name: Extract pif.json from the zip
         run: |
           unzip PlayIntegrityFix.zip
@@ -80,7 +54,7 @@ jobs:
             echo "pif.json not found!" && exit 1
           fi
 
-      # Step 8: Read MODEL value from pif.json
+      # Step 6: Read MODEL value from pif.json
       - name: Read MODEL value
         id: read_model
         run: |
@@ -88,7 +62,7 @@ jobs:
           echo "MODEL value: $MODEL"
           echo "::set-output name=model::$MODEL"
 
-      # Step 9: Generate a valid and unique tag name for your release
+      # Step 7: Generate a valid and unique tag name for your release
       - name: Generate tag name
         id: generate_tag
         run: |
@@ -96,7 +70,7 @@ jobs:
           echo "Generated tag name: $TAG_NAME"
           echo "::set-output name=tag::$TAG_NAME"
 
-      # Step 10: Create a new release with PlayIntegrityFix tag mentioned in the description
+      # Step 8: Create a new release with PlayIntegrityFix tag mentioned in the description
       - name: Create new release with pif.json
         id: create_release
         uses: actions/create-release@v1
@@ -109,7 +83,7 @@ jobs:
           draft: false
           prerelease: false
 
-      # Step 11: Upload pif.json to the newly created release
+      # Step 9: Upload pif.json to the newly created release
       - name: Upload pif.json to release
         uses: actions/upload-release-asset@v1
         env:
