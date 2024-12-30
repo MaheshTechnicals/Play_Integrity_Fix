@@ -26,12 +26,14 @@ jobs:
             RUNS=$(echo "$RESPONSE" | jq -r '.workflow_runs[] | .id')
             PAGE=$((PAGE + 1))
           done
+          echo "Runs to delete: $RUNS"
           echo "::set-output name=runs::$RUNS"
 
       # Step 2: Delete all previous workflow runs
       - name: Delete all previous workflow runs
         run: |
           RUNS="${{ steps.get_runs.outputs.runs }}"
+          echo "Deleting the following runs: $RUNS"
           for RUN_ID in $RUNS; do
             curl -X DELETE -H "Authorization: token ${{ secrets.MY_GITHUB_TOKEN }}" \
               "https://api.github.com/repos/MaheshTechnicals/Play_Integrity_Fix/actions/runs/$RUN_ID"
